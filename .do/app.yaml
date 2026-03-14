@@ -1,0 +1,58 @@
+name: interview-me
+region: nyc
+
+ingress:
+  rules:
+    - match:
+        path:
+          prefix: /api
+      component:
+        name: backend
+    - match:
+        path:
+          prefix: /
+      component:
+        name: frontend
+
+services:
+  - name: backend
+    github:
+      repo: your-github-repo
+      branch: main
+      deploy_on_push: true
+    source_dir: /
+    build_command: npm install && npm run build:backend
+    run_command: cd backend && node dist/index.js
+    environment_slug: node-js
+    instance_count: 1
+    instance_size_slug: apps-s-1vcpu-0.5gb
+    http_port: 3001
+    envs:
+      - key: DATABASE_URL
+        scope: RUN_TIME
+        value: ${db.DATABASE_URL}
+      - key: DO_MODEL_ACCESS_KEY
+        scope: RUN_TIME
+        type: SECRET
+      - key: NODE_ENV
+        value: production
+
+static_sites:
+  - name: frontend
+    github:
+      repo: your-github-repo
+      branch: main
+      deploy_on_push: true
+    source_dir: /
+    build_command: npm install && npm run build:frontend
+    output_dir: frontend/dist
+    envs:
+      - key: VITE_API_URL
+        scope: BUILD_TIME
+        value: ${APP_URL}
+
+databases:
+  - name: db
+    engine: PG
+    production: false
+    version: "16"
