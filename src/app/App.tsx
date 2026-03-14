@@ -1,15 +1,29 @@
 import React, { useState } from "react";
 import { motion } from "motion/react";
 import { Search, ArrowRight } from "lucide-react";
+import { BrowserRouter, Routes, Route, useNavigate } from "react-router-dom";
+import ChatbotPage from "./pages/ChatbotPage";
 
 export default function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<MainPage />} />
+        <Route path="/chat" element={<ChatbotPage />} />
+      </Routes>
+    </BrowserRouter>
+  );
+}
+
+const MainPage = () => {
+  const navigate = useNavigate();
   const [job, setJob] = useState("");
   const [isFocused, setIsFocused] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (job) {
-      alert(`Connecting you to the AI agent for: ${job}...`);
+      navigate(`/chat?position=${encodeURIComponent(job)}`);
     }
   };
 
