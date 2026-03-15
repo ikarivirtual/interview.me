@@ -8,7 +8,7 @@ import StatusIndicator from "../components/voice/StatusIndicator";
 import type { InterviewStatus } from "../components/voice/StatusIndicator";
 import { useSpeechRecognition } from "../hooks/useSpeechRecognition";
 import { useSpeechSynthesis } from "../hooks/useSpeechSynthesis";
-import { createSession, sendMessage, endSession } from "../lib/api";
+import { createSession, getSession, sendMessage, endSession } from "../lib/api";
 
 export default function InterviewPage() {
   const { sessionId: paramSessionId } = useParams();
@@ -21,7 +21,10 @@ export default function InterviewPage() {
   const sessionIdRef = useRef(sessionId);
   const isEndingRef = useRef(false);
 
-  const { transcript, isListening, start: startListening, stop: stopListening, supported } = useSpeechRecognition();
+  const handleSendRef = useRef<() => void>(() => {});
+  const { transcript, isListening, start: startListening, stop: stopListening, supported } = useSpeechRecognition(
+    () => handleSendRef.current(),
+  );
   const { isSpeaking, speak, cancel: cancelSpeech } = useSpeechSynthesis();
 
   // Keep ref in sync
@@ -29,9 +32,30 @@ export default function InterviewPage() {
     sessionIdRef.current = sessionId;
   }, [sessionId]);
 
-  // Initialize session
+  // Initialize session — either load existing (from MainPage) or create new (legacy URL params)
   useEffect(() => {
-    if (paramSessionId || sessionId) return;
+    if (sessionId && sessionId !== paramSessionId) return;
+
+    if (paramSessionId) {
+      // Session already created by MainPage — load it and speak the last assistant message
+      getSession(paramSessionId)
+        .then(async (data) => {
+          setSessionId(data.session.id);
+          const messages = data.messages || [];
+          const lastAssistant = [...messages].reverse().find((m: { role: string }) => m.role === "assistant");
+          if (lastAssistant) {
+            setCurrentText(lastAssistant.content);
+            setStatus("ai_speaking");
+            await speak(lastAssistant.content);
+            setStatus("listening");
+            startListening();
+          }
+        })
+        .catch((err) => {
+          console.error("Failed to load session:", err);
+        });
+      return;
+    }
 
     const position = searchParams.get("position") || "Software Engineer";
     const company = searchParams.get("company") || undefined;
@@ -56,8 +80,10 @@ export default function InterviewPage() {
   }, [paramSessionId, sessionId, searchParams, speak, startListening]);
 
   // Handle sending transcript when user stops speaking
+  const isSendingRef = useRef(false);
   const handleSend = useCallback(async () => {
-    if (!sessionIdRef.current || !transcript.trim()) return;
+    if (!sessionIdRef.current || !transcript.trim() || isSendingRef.current) return;
+    isSendingRef.current = true;
 
     stopListening();
     setStatus("processing");
@@ -81,8 +107,15 @@ export default function InterviewPage() {
       console.error("Chat error:", err);
       setStatus("listening");
       startListening();
+    } finally {
+      isSendingRef.current = false;
     }
   }, [transcript, stopListening, startListening, speak]);
+
+  // Keep ref in sync so silence callback always calls latest handleSend
+  useEffect(() => {
+    handleSendRef.current = handleSend;
+  }, [handleSend]);
 
   const handleMicToggle = useCallback(() => {
     if (isListening) {

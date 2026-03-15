@@ -1,9 +1,11 @@
 import React, { useState } from "react";
 import { motion } from "motion/react";
-import { Search, ArrowRight, Building2 } from "lucide-react";
+import { Search, ArrowRight, Building2, Link, ChevronDown } from "lucide-react";
 import { BrowserRouter, Routes, Route, useNavigate } from "react-router-dom";
 import InterviewPage from "./pages/InterviewPage";
 import ReportPage from "./pages/ReportPage";
+import LoadingScreen from "./components/LoadingScreen";
+import { createSession } from "./lib/api";
 
 export default function App() {
   return (
@@ -22,16 +24,32 @@ const MainPage = () => {
   const navigate = useNavigate();
   const [job, setJob] = useState("");
   const [company, setCompany] = useState("");
+  const [jobUrl, setJobUrl] = useState("");
+  const [userContext, setUserContext] = useState("");
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (job) {
-      const params = new URLSearchParams({ position: job });
-      if (company) params.set("company", company);
-      navigate(`/interview/new?${params.toString()}`);
+    if (!job && !jobUrl) return;
+
+    setIsLoading(true);
+    try {
+      const data = await createSession(job || "Software Engineer", company || undefined, {
+        job_url: jobUrl || undefined,
+        user_context: userContext || undefined,
+      });
+      navigate(`/interview/${data.session.id}`);
+    } catch (err) {
+      console.error("Failed to create session:", err);
+      setIsLoading(false);
     }
   };
+
+  if (isLoading) {
+    return <LoadingScreen />;
+  }
 
   return (
     <div className="relative min-h-screen overflow-hidden font-sans flex flex-col selection:bg-[#4facfe] selection:text-white bg-[#82C8FF]">
@@ -116,14 +134,16 @@ const MainPage = () => {
                   onChange={(e) => setJob(e.target.value)}
                   onFocus={() => setIsFocused(true)}
                   onBlur={() => setIsFocused(false)}
-                  className="w-full pl-14 pr-36 py-4 sm:py-5 bg-transparent text-xl font-medium text-white placeholder-white/80 focus:outline-none [text-shadow:0_1px_3px_rgba(0,0,0,0.2)]"
+                  disabled={isLoading}
+                  className="w-full pl-14 pr-36 py-4 sm:py-5 bg-transparent text-xl font-medium text-white placeholder-white/80 focus:outline-none [text-shadow:0_1px_3px_rgba(0,0,0,0.2)] disabled:opacity-50"
                 />
 
                 {/* Modernized Glossy Button */}
                 <div className="absolute right-2 top-2 bottom-2">
                   <button
                     type="submit"
-                    className="relative w-full h-full px-6 sm:px-8 rounded-[1.2rem] overflow-hidden bg-gradient-to-b from-[#4facfe] to-[#00f2fe] border border-white/50 shadow-[0_4px_12px_rgba(0,163,255,0.3),_inset_0_2px_4px_rgba(255,255,255,0.6)] active:scale-[0.97] transition-all hover:shadow-[0_6px_16px_rgba(0,163,255,0.4),_inset_0_2px_4px_rgba(255,255,255,0.8)] hover:brightness-105 group flex items-center justify-center gap-2"
+                    disabled={isLoading || (!job && !jobUrl)}
+                    className="relative w-full h-full px-6 sm:px-8 rounded-[1.2rem] overflow-hidden bg-gradient-to-b from-[#4facfe] to-[#00f2fe] border border-white/50 shadow-[0_4px_12px_rgba(0,163,255,0.3),_inset_0_2px_4px_rgba(255,255,255,0.6)] active:scale-[0.97] transition-all hover:shadow-[0_6px_16px_rgba(0,163,255,0.4),_inset_0_2px_4px_rgba(255,255,255,0.8)] hover:brightness-105 group flex items-center justify-center gap-2 disabled:opacity-50 disabled:pointer-events-none"
                   >
                     {/* Modern smooth top highlight instead of harsh 50% cutoff */}
                     <div className="absolute inset-x-0 top-0 h-[60%] bg-gradient-to-b from-white/40 to-transparent opacity-80" />
@@ -146,9 +166,55 @@ const MainPage = () => {
                   placeholder="Company name (optional)"
                   value={company}
                   onChange={(e) => setCompany(e.target.value)}
-                  className="w-full pl-14 pr-6 py-3 sm:py-4 bg-transparent text-lg font-medium text-white placeholder-white/60 focus:outline-none [text-shadow:0_1px_3px_rgba(0,0,0,0.2)]"
+                  disabled={isLoading}
+                  className="w-full pl-14 pr-6 py-3 sm:py-4 bg-transparent text-lg font-medium text-white placeholder-white/60 focus:outline-none [text-shadow:0_1px_3px_rgba(0,0,0,0.2)] disabled:opacity-50"
                 />
               </div>
+            </div>
+
+            {/* Job URL field */}
+            <div className="relative p-2 rounded-[2rem] backdrop-blur-2xl bg-white/20 border border-white/40 shadow-[0_8px_24px_rgba(0,0,0,0.05)]">
+              <div className="relative flex items-center w-full bg-white/30 rounded-[1.5rem] border border-white/40 overflow-hidden">
+                <Link className="absolute left-6 w-5 h-5 text-white/80 drop-shadow-md" />
+                <input
+                  type="url"
+                  placeholder="Paste a job posting URL (optional)"
+                  value={jobUrl}
+                  onChange={(e) => setJobUrl(e.target.value)}
+                  disabled={isLoading}
+                  className="w-full pl-14 pr-6 py-3 sm:py-4 bg-transparent text-lg font-medium text-white placeholder-white/60 focus:outline-none [text-shadow:0_1px_3px_rgba(0,0,0,0.2)] disabled:opacity-50"
+                />
+              </div>
+            </div>
+
+            {/* Advanced: user context textarea */}
+            <div>
+              <button
+                type="button"
+                onClick={() => setShowAdvanced(!showAdvanced)}
+                className="flex items-center gap-1 mx-auto text-white/70 text-sm font-medium hover:text-white/90 transition-colors"
+              >
+                <ChevronDown className={`w-4 h-4 transition-transform ${showAdvanced ? "rotate-180" : ""}`} />
+                Paste additional context
+              </button>
+              {showAdvanced && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  className="mt-3 relative p-2 rounded-[2rem] backdrop-blur-2xl bg-white/20 border border-white/40 shadow-[0_8px_24px_rgba(0,0,0,0.05)]"
+                >
+                  <div className="relative w-full bg-white/30 rounded-[1.5rem] border border-white/40 overflow-hidden">
+                    <textarea
+                      placeholder="Paste job description, Glassdoor reviews, or any context that helps tailor the interview..."
+                      value={userContext}
+                      onChange={(e) => setUserContext(e.target.value)}
+                      disabled={isLoading}
+                      rows={4}
+                      className="w-full px-6 py-4 bg-transparent text-lg font-medium text-white placeholder-white/60 focus:outline-none [text-shadow:0_1px_3px_rgba(0,0,0,0.2)] resize-none disabled:opacity-50"
+                    />
+                  </div>
+                </motion.div>
+              )}
             </div>
           </form>
 
