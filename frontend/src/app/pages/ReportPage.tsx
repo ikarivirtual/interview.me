@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion } from "motion/react";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import ScoreGrid from "../components/report/ScoreGrid";
-import { getReport } from "../lib/api";
+import { streamReport } from "../lib/api";
 
 interface ReportData {
   content: string;
@@ -15,33 +15,41 @@ export default function ReportPage() {
   const navigate = useNavigate();
   const [report, setReport] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [streaming, setStreaming] = useState(false);
+  const contentRef = useRef("");
 
   useEffect(() => {
     if (!sessionId) return;
 
     let cancelled = false;
 
-    async function poll() {
-      while (!cancelled) {
-        try {
-          const data = await getReport(sessionId!);
-          if (data.status === "generating") {
-            await new Promise((r) => setTimeout(r, 3000));
-            continue;
-          }
-          if (!cancelled) {
-            setReport({ content: data.report.content, scores: data.report.scores });
-            setLoading(false);
-          }
-          return;
-        } catch (err) {
-          console.error("Failed to fetch report:", err);
-          await new Promise((r) => setTimeout(r, 3000));
+    async function fetchReport() {
+      try {
+        setStreaming(true);
+        setLoading(false);
+
+        const { scores } = await streamReport(sessionId!, (token) => {
+          if (cancelled) return;
+          contentRef.current += token;
+          setReport({ content: contentRef.current, scores: null });
+        });
+
+        if (!cancelled) {
+          // Strip SCORES_JSON line from displayed content
+          const cleanContent = contentRef.current.replace(/SCORES_JSON:\s*\{[^}]+\}/, "").trim();
+          setReport({ content: cleanContent, scores });
+          setStreaming(false);
+        }
+      } catch (err) {
+        console.error("Failed to stream report:", err);
+        if (!cancelled) {
+          setLoading(true);
+          setStreaming(false);
         }
       }
     }
 
-    poll();
+    fetchReport();
     return () => { cancelled = true; };
   }, [sessionId]);
 
@@ -112,16 +120,21 @@ export default function ReportPage() {
 
             <div className="bg-white/15 backdrop-blur-xl border border-white/30 rounded-2xl p-8 shadow-[0_16px_40px_rgba(0,0,0,0.08)]">
               {renderMarkdown(report.content)}
+              {streaming && (
+                <span className="inline-block w-2 h-5 bg-white/70 animate-pulse ml-0.5 align-text-bottom" />
+              )}
             </div>
 
-            <div className="flex justify-center">
-              <button
-                onClick={() => navigate("/")}
-                className="px-8 py-3 rounded-full bg-white/20 backdrop-blur-xl border border-white/40 text-white font-medium hover:bg-white/30 transition-all shadow-lg"
-              >
-                Start New Interview
-              </button>
-            </div>
+            {!streaming && (
+              <div className="flex justify-center">
+                <button
+                  onClick={() => navigate("/")}
+                  className="px-8 py-3 rounded-full bg-white/20 backdrop-blur-xl border border-white/40 text-white font-medium hover:bg-white/30 transition-all shadow-lg"
+                >
+                  Start New Interview
+                </button>
+              </div>
+            )}
           </motion.div>
         ) : null}
       </main>

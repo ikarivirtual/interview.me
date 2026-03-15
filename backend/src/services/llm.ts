@@ -18,13 +18,13 @@ export async function chatCompletion(
   });
 }
 
-export async function generateReport(
+export async function generateReportStream(
   messages: OpenAI.Chat.ChatCompletionMessageParam[],
 ) {
-  const response = await openai.chat.completions.create({
+  return openai.chat.completions.create({
     model: MODEL,
     messages,
-    stream: false,
+    max_tokens: 2048,
+    stream: true,
   });
-  return response.choices[0]?.message?.content || "";
 }

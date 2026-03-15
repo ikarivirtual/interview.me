@@ -151,10 +151,7 @@ router.post("/:id/end", async (req, res, next) => {
       console.error("Transcript log failed:", err),
     );
 
-    // Trigger async report generation (fire and forget)
-    generateReportAsync(id).catch((err) =>
-      console.error("Report generation failed:", err),
-    );
+    // Report generation is now triggered on-demand via the stream endpoint
 
     res.json({ session: sessionResult.rows[0] });
   } catch (err) {
@@ -209,73 +206,6 @@ async function saveTranscriptLog(sessionId: string, session: Session) {
   const path = `${dir}/${filename}.txt`;
   await writeFile(path, lines.join("\n"), "utf-8");
   console.log(`[TRANSCRIPT] Saved to ${path}`);
-}
-
-async function generateReportAsync(sessionId: string) {
-  const { reportGenerationPrompt } = await import("../services/prompts.js");
-  const { generateReport } = await import("../services/llm.js");
-
-  const sessionResult = await pool.query<Session>(
-    `SELECT * FROM sessions WHERE id = $1`,
-    [sessionId],
-  );
-  const session = sessionResult.rows[0];
-
-  const messagesResult = await pool.query<Message>(
-    `SELECT role, content FROM messages WHERE session_id = $1 ORDER BY created_at ASC`,
-    [sessionId],
-  );
-
-  const nonSystemMessages = messagesResult.rows.filter((m) => m.role !== "system");
-  const candidateMessages = nonSystemMessages.filter((m) => m.role === "user");
-
-  // No candidate responses — nothing to evaluate
-  if (candidateMessages.length === 0) {
-    const markdownContent = "## Interview Not Completed\n\nThe interview ended before any responses were given. Start a new interview and answer the questions to receive a performance report.";
-    await pool.query(
-      `INSERT INTO reports (session_id, content, scores) VALUES ($1, $2, $3)`,
-      [sessionId, markdownContent, JSON.stringify({ overall: 0, communication: 0, technical_knowledge: 0, problem_solving: 0, professionalism: 0 })],
-    );
-    return;
-  }
-
-  const transcript = nonSystemMessages
-    .map((m) => `${m.role === "assistant" ? "Interviewer" : "Candidate"}: ${m.content}`)
-    .join("\n\n");
-
-  const systemPrompt = reportGenerationPrompt(session.job_title, session.company, {
-    scraped: session.scraped_context || undefined,
-    searched: session.search_context || undefined,
-    userContext: session.user_context || undefined,
-  });
-  const reportContent = await generateReport([
-    { role: "system", content: systemPrompt },
-    { role: "user", content: `Here is the interview transcript:\n\n${transcript}` },
-  ]);
-
-  // Parse scores from the response
-  let scores: Record<string, number> | null = null;
-  let markdownContent = reportContent;
-
-  const scoresMatch = reportContent.match(/SCORES_JSON:\s*(\{[^}]+\})/);
-  if (scoresMatch) {
-    try {
-      scores = JSON.parse(scoresMatch[1]);
-      markdownContent = reportContent.replace(/SCORES_JSON:\s*\{[^}]+\}/, "").trim();
-    } catch {
-      // If parsing fails, keep the full content
-    }
-  }
-
-  await pool.query(
-    `INSERT INTO reports (session_id, content, scores) VALUES ($1, $2, $3)`,
-    [sessionId, markdownContent, scores ? JSON.stringify(scores) : null],
-  );
-
-  await pool.query(
-    `UPDATE sessions SET status = 'report_ready' WHERE id = $1`,
-    [sessionId],
-  );
 }
 
 export default router;

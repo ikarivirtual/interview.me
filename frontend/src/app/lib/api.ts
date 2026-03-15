@@ -76,3 +76,37 @@ export async function getReport(sessionId: string) {
   if (!res.ok) throw new Error("Failed to get report");
   return res.json();
 }
+
+export async function streamReport(
+  sessionId: string,
+  onToken: (token: string) => void,
+): Promise<{ scores: Record<string, number> | null }> {
+  const res = await fetch(`${API_BASE}/api/sessions/${sessionId}/report/stream`);
+  if (!res.ok) throw new Error("Failed to stream report");
+
+  const reader = res.body!.getReader();
+  const decoder = new TextDecoder();
+  let scores: Record<string, number> | null = null;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    const chunk = decoder.decode(value, { stream: true });
+    const lines = chunk.split("\n");
+
+    for (const line of lines) {
+      if (!line.startsWith("data: ")) continue;
+      const data = JSON.parse(line.slice(6));
+      if (data.error) {
+        throw new Error(data.error);
+      } else if (data.done) {
+        scores = data.scores ?? null;
+      } else if (data.token) {
+        onToken(data.token);
+      }
+    }
+  }
+
+  return { scores };
+}
