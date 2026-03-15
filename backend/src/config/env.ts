@@ -13,4 +13,6 @@ export const env = {
   DO_MODEL_ACCESS_KEY: required("DO_MODEL_ACCESS_KEY"),
   PORT: parseInt(process.env.PORT || "3001", 10),
   NODE_ENV: process.env.NODE_ENV || "development",
+  SERPER_API_KEY: process.env.SERPER_API_KEY || "",
+  JINA_API_KEY: process.env.JINA_API_KEY || "",
 };

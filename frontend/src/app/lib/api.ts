@@ -1,10 +1,19 @@
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
-export async function createSession(jobTitle: string, company?: string) {
+export async function createSession(
+  jobTitle: string,
+  company?: string,
+  options?: { job_url?: string; user_context?: string },
+) {
   const res = await fetch(`${API_BASE}/api/sessions`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ job_title: jobTitle, company }),
+    body: JSON.stringify({
+      job_title: jobTitle,
+      company,
+      job_url: options?.job_url,
+      user_context: options?.user_context,
+    }),
   });
   if (!res.ok) throw new Error("Failed to create session");
   return res.json();

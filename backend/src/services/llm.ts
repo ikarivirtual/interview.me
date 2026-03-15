@@ -6,7 +6,7 @@ export const openai = new OpenAI({
   apiKey: env.DO_MODEL_ACCESS_KEY,
 });
 
-const MODEL = "llama3.3-70b-instruct";
+const MODEL = "glm-5";
 
 export async function chatCompletion(
   messages: OpenAI.Chat.ChatCompletionMessageParam[],

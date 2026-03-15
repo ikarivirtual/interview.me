@@ -24,3 +24,8 @@ CREATE TABLE IF NOT EXISTS reports (
   scores JSONB,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS job_url TEXT;
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS scraped_context JSONB;
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS search_context JSONB;
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS user_context TEXT;
