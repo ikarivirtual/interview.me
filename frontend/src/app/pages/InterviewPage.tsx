@@ -53,6 +53,7 @@ export default function InterviewPage() {
         })
         .catch((err) => {
           console.error("Failed to load session:", err);
+          navigate("/");
         });
       return;
     }

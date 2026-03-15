@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { writeFile, mkdir } from "node:fs/promises";
+import { join } from "node:path";
 import { pool } from "../config/database.js";
 import { chatCompletion } from "../services/llm.js";
 import { interviewerSystemPrompt } from "../services/prompts.js";
@@ -203,7 +204,7 @@ async function saveTranscriptLog(sessionId: string, session: Session) {
     lines.push(``);
   }
 
-  const dir = new URL("../../logs", import.meta.url).pathname;
+  const dir = join(process.cwd(), "logs");
   await mkdir(dir, { recursive: true });
   const path = `${dir}/${filename}.txt`;
   await writeFile(path, lines.join("\n"), "utf-8");

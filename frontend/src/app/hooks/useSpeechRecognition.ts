@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 
 interface SpeechRecognitionResult {
   transcript: string;
@@ -94,6 +94,17 @@ export function useSpeechRecognition(
       recognitionRef.current = null;
     }
     setIsListening(false);
+  }, [clearSilenceTimer]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      clearSilenceTimer();
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+        recognitionRef.current = null;
+      }
+    };
   }, [clearSilenceTimer]);
 
   return { transcript, isListening, start, stop, supported };

@@ -32,7 +32,7 @@ services:
       postgres:
         condition: service_healthy
     volumes:
-      - logs:/app/backend/logs
+      - logs:/app/logs
 
   frontend:
     build:
