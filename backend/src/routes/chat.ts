@@ -30,6 +30,7 @@ router.post("/", async (req, res, next) => {
     }
 
     // Store user message
+    console.log(`[CHAT] session=${session_id.slice(0, 8)}… user: "${content.slice(0, 100)}${content.length > 100 ? "…" : ""}"`);
     await pool.query(
       `INSERT INTO messages (session_id, role, content) VALUES ($1, 'user', $2)`,
       [session_id, content],
@@ -54,6 +55,7 @@ router.post("/", async (req, res, next) => {
       Connection: "keep-alive",
     });
 
+    const llmStart = Date.now();
     const stream = await chatCompletion(llmMessages);
     let fullContent = "";
 
@@ -66,6 +68,7 @@ router.post("/", async (req, res, next) => {
     }
 
     // Store assistant message
+    console.log(`[CHAT] session=${session_id.slice(0, 8)}… assistant (${Date.now() - llmStart}ms): "${fullContent.slice(0, 120)}…"`);
     const msgResult = await pool.query<Message>(
       `INSERT INTO messages (session_id, role, content) VALUES ($1, 'assistant', $2) RETURNING id`,
       [session_id, fullContent],
