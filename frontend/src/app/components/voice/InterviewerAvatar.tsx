@@ -8,46 +8,61 @@ interface InterviewerAvatarProps {
 export default function InterviewerAvatar({ isSpeaking, isProcessing }: InterviewerAvatarProps) {
   return (
     <div className="relative flex items-center justify-center">
-      {/* Outer glow */}
+      {/* Outer ambient glow */}
       <motion.div
         animate={
           isSpeaking
-            ? { scale: [1, 1.15, 1], opacity: [0.3, 0.6, 0.3] }
+            ? { scale: [1, 1.3, 1], opacity: [0.08, 0.2, 0.08] }
             : isProcessing
-              ? { scale: [1, 1.05, 1], opacity: [0.2, 0.4, 0.2] }
-              : { scale: 1, opacity: 0.2 }
+              ? { scale: [1, 1.1, 1], opacity: [0.05, 0.12, 0.05] }
+              : { scale: 1, opacity: 0.05 }
         }
-        transition={{ duration: isSpeaking ? 0.8 : 2, repeat: Infinity, ease: "easeInOut" }}
-        className="absolute w-48 h-48 rounded-full bg-gradient-to-br from-[#4facfe] to-[#00f2fe] blur-2xl"
+        transition={{ duration: isSpeaking ? 0.6 : 2.5, repeat: Infinity, ease: "easeInOut" }}
+        className="absolute w-56 h-56 rounded-full bg-emerald-500 blur-[60px]"
       />
+
+      {/* Secondary ring — pulses when speaking */}
+      {isSpeaking && (
+        <motion.div
+          animate={{ scale: [1, 1.4], opacity: [0.15, 0] }}
+          transition={{ duration: 1.2, repeat: Infinity, ease: "easeOut" }}
+          className="absolute w-36 h-36 rounded-full border border-emerald-400/30"
+        />
+      )}
 
       {/* Main orb */}
       <motion.div
         animate={
           isSpeaking
-            ? { scale: [1, 1.08, 1] }
+            ? { scale: [1, 1.06, 1] }
             : isProcessing
               ? { rotate: 360 }
               : { scale: 1 }
         }
         transition={
           isSpeaking
-            ? { duration: 0.6, repeat: Infinity, ease: "easeInOut" }
+            ? { duration: 0.5, repeat: Infinity, ease: "easeInOut" }
             : isProcessing
-              ? { duration: 3, repeat: Infinity, ease: "linear" }
+              ? { duration: 4, repeat: Infinity, ease: "linear" }
               : {}
         }
-        className="relative w-32 h-32 rounded-full bg-gradient-to-br from-[#4facfe] to-[#00f2fe] shadow-[0_8px_40px_rgba(79,172,254,0.4)] border border-white/30 overflow-hidden"
+        className="relative w-28 h-28 rounded-full overflow-hidden"
       >
-        {/* Glass highlight */}
-        <div className="absolute top-0 inset-x-0 h-[55%] bg-gradient-to-b from-white/50 to-transparent rounded-b-full" />
+        {/* Gradient fill */}
+        <div className="absolute inset-0 bg-gradient-to-br from-emerald-400 via-emerald-500 to-teal-600" />
+
+        {/* Subtle inner highlight */}
+        <div className="absolute top-0 inset-x-0 h-[45%] bg-gradient-to-b from-white/20 to-transparent" />
+
+        {/* Border ring */}
+        <div className="absolute inset-0 rounded-full border border-white/10" />
 
         {/* Inner pulse for processing */}
         {isProcessing && (
           <motion.div
-            animate={{ opacity: [0.3, 0.7, 0.3] }}
-            transition={{ duration: 1.2, repeat: Infinity }}
-            className="absolute inset-4 rounded-full bg-white/20"
+            animate={{ opacity: [0.1, 0.3, 0.1] }}
+            transition={{ duration: 1.5, repeat: Infinity }}
+            className="absolute inset-4 rounded-full bg-white/10"
           />
         )}
       </motion.div>

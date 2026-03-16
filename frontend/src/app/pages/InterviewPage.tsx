@@ -3,52 +3,122 @@ import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "motion/react";
 import { PhoneOff } from "lucide-react";
 import InterviewerAvatar from "../components/voice/InterviewerAvatar";
-import MicButton from "../components/voice/MicButton";
 import StatusIndicator from "../components/voice/StatusIndicator";
 import type { InterviewStatus } from "../components/voice/StatusIndicator";
 import { useSpeechRecognition } from "../hooks/useSpeechRecognition";
 import { useSpeechSynthesis } from "../hooks/useSpeechSynthesis";
-import { createSession, getSession, sendMessage, endSession } from "../lib/api";
+import { createSession, getSession, sendMessage, endSession, deleteLastUserMessage } from "../lib/api";
+
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 export default function InterviewPage() {
+  const showDebugInput = import.meta.env.DEV;
   const { sessionId: paramSessionId } = useParams();
   const [searchParams] = useSearchParams();
+  const debugTextMode = showDebugInput && searchParams.get("debugInput") === "1";
   const navigate = useNavigate();
 
   const [status, setStatus] = useState<InterviewStatus>("initializing");
   const [sessionId, setSessionId] = useState<string | null>(paramSessionId || null);
   const [currentText, setCurrentText] = useState("");
+  const [debugAnswer, setDebugAnswer] = useState("");
+  const [needsGesture, setNeedsGesture] = useState(false);
+  const pendingTextRef = useRef<string | null>(null);
   const sessionIdRef = useRef(sessionId);
   const isEndingRef = useRef(false);
+  const initRef = useRef(false);
 
   const handleSendRef = useRef<() => void>(() => {});
-  const { transcript, isListening, start: startListening, stop: stopListening, supported } = useSpeechRecognition(
+  const { transcript, start: startListening, stop: stopListening, supported } = useSpeechRecognition(
     () => handleSendRef.current(),
   );
   const { isSpeaking, speak, cancel: cancelSpeech } = useSpeechSynthesis();
+
+  // Stable refs for functions used in the init effect
+  const speakRef = useRef(speak);
+  speakRef.current = speak;
+  const startListeningRef = useRef(startListening);
+  startListeningRef.current = startListening;
 
   // Keep ref in sync
   useEffect(() => {
     sessionIdRef.current = sessionId;
   }, [sessionId]);
 
-  // Initialize session — either load existing (from MainPage) or create new (legacy URL params)
+  // Speak AI response and transition to listening
+  const speakAndListen = useCallback(async (text: string) => {
+    if (isEndingRef.current || !text.trim()) return;
+    setCurrentText(text);
+    setStatus("ai_speaking");
+
+    // Test if TTS is allowed (browsers block it without a user gesture)
+    const testUtterance = new SpeechSynthesisUtterance("");
+    let ttsBlocked = false;
+    try {
+      window.speechSynthesis.speak(testUtterance);
+      // If speaking queue is empty right after, TTS was blocked
+      if (!window.speechSynthesis.speaking && !window.speechSynthesis.pending) {
+        ttsBlocked = true;
+      }
+      window.speechSynthesis.cancel();
+    } catch {
+      ttsBlocked = true;
+    }
+
+    if (ttsBlocked) {
+      // Need a user click before we can play audio
+      pendingTextRef.current = text;
+      setNeedsGesture(true);
+      return;
+    }
+
+    await speakRef.current(text);
+    if (!isEndingRef.current) {
+      setStatus("listening");
+      startListeningRef.current();
+    }
+  }, []);
+
+  // Initialize session — runs once
   useEffect(() => {
-    if (sessionId && sessionId !== paramSessionId) return;
+    if (initRef.current) return;
+    initRef.current = true;
 
     if (paramSessionId) {
-      // Session already created by MainPage — load it and speak the last assistant message
+      // Reconnecting — load session and resume from the right point
       getSession(paramSessionId)
         .then(async (data) => {
-          setSessionId(data.session.id);
-          const messages = data.messages || [];
-          const lastAssistant = [...messages].reverse().find((m: { role: string }) => m.role === "assistant");
-          if (lastAssistant) {
-            setCurrentText(lastAssistant.content);
-            setStatus("ai_speaking");
-            await speak(lastAssistant.content);
-            setStatus("listening");
-            startListening();
+          const session = data.session;
+          const messages: Array<{ role: string; content: string }> = data.messages || [];
+
+          // Session already ended — go straight to report
+          if (session.status === "ended" || session.status === "report_ready") {
+            navigate(`/report/${paramSessionId}`, { replace: true });
+            return;
+          }
+
+          setSessionId(session.id);
+
+          const lastMessage = messages[messages.length - 1];
+
+          if (!lastMessage || lastMessage.role === "assistant") {
+            // Normal case: last thing was AI speaking — replay it
+            const text = lastMessage?.content;
+            if (text) await speakAndListen(text);
+          } else if (lastMessage.role === "user") {
+            // User's message was saved but AI response was lost mid-stream.
+            // Delete the orphaned message so it won't duplicate in history,
+            // then replay the last question and let the user re-answer.
+            await deleteLastUserMessage(paramSessionId).catch(() => {});
+            const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant");
+            if (lastAssistant) {
+              await speakAndListen(lastAssistant.content);
+            } else {
+              setStatus("listening");
+              startListeningRef.current();
+            }
           }
         })
         .catch((err) => {
@@ -64,70 +134,88 @@ export default function InterviewPage() {
     createSession(position, company)
       .then(async (data) => {
         setSessionId(data.session.id);
-        // Replace URL with session ID
         window.history.replaceState(null, "", `/interview/${data.session.id}`);
-
-        // Speak first message
-        const firstMsg = data.firstMessage.content;
-        setCurrentText(firstMsg);
-        setStatus("ai_speaking");
-        await speak(firstMsg);
-        setStatus("listening");
-        startListening();
+        await speakAndListen(data.firstMessage.content);
       })
       .catch((err) => {
         console.error("Failed to create session:", err);
+        navigate("/");
       });
-  }, [paramSessionId, sessionId, searchParams, speak, startListening]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Handle sending transcript when user stops speaking
   const isSendingRef = useRef(false);
-  const handleSend = useCallback(async () => {
-    if (!sessionIdRef.current || !transcript.trim() || isSendingRef.current) return;
+  const submitAnswer = useCallback(async (answer: string) => {
+    if (!sessionIdRef.current || !answer.trim() || isSendingRef.current) return;
     isSendingRef.current = true;
 
     stopListening();
     setStatus("processing");
-    setCurrentText("");
+    setCurrentText(answer.trim());
 
     let fullResponse = "";
     try {
-      await sendMessage(sessionIdRef.current, transcript.trim(), (token) => {
+      const result = await sendMessage(sessionIdRef.current, answer.trim(), (token) => {
         fullResponse += token;
         setCurrentText(fullResponse);
       });
 
-      setStatus("ai_speaking");
-      await speak(fullResponse);
-
-      if (!isEndingRef.current) {
-        setStatus("listening");
-        startListening();
+      if (result.interviewComplete) {
+        // Interview is over — speak the closing, then transition into the report view.
+        setStatus("ai_speaking");
+        setCurrentText(result.text);
+        await speakRef.current(result.text);
+        isEndingRef.current = true;
+        setStatus("ended");
+        setCurrentText("Preparing your interview report...");
+        await endSession(sessionIdRef.current);
+        await delay(600);
+        navigate(`/report/${sessionIdRef.current}`);
+      } else {
+        await speakAndListen(result.text);
       }
     } catch (err) {
       console.error("Chat error:", err);
-      setStatus("listening");
-      startListening();
+      if (!isEndingRef.current) {
+        setStatus("listening");
+        startListeningRef.current();
+      }
     } finally {
       isSendingRef.current = false;
     }
-  }, [transcript, stopListening, startListening, speak]);
+  }, [stopListening, speakAndListen, navigate]);
+
+  const handleSend = useCallback(async () => {
+    if (!transcript.trim()) return;
+    await submitAnswer(transcript.trim());
+  }, [submitAnswer, transcript]);
+
+  const handleDebugSubmit = useCallback(async () => {
+    if (!debugAnswer.trim()) return;
+    const answer = debugAnswer;
+    setDebugAnswer("");
+    await submitAnswer(answer);
+  }, [debugAnswer, submitAnswer]);
 
   // Keep ref in sync so silence callback always calls latest handleSend
   useEffect(() => {
     handleSendRef.current = handleSend;
   }, [handleSend]);
 
-  const handleMicToggle = useCallback(() => {
-    if (isListening) {
-      // User stopped talking — send the transcript
-      handleSend();
-    } else if (status === "listening" || status === "ai_speaking") {
-      cancelSpeech();
-      setStatus("listening");
-      startListening();
+  // Resume TTS after user gesture unblocks audio
+  const handleGestureUnblock = useCallback(async () => {
+    setNeedsGesture(false);
+    const text = pendingTextRef.current;
+    pendingTextRef.current = null;
+    if (text) {
+      await speakRef.current(text);
+      if (!isEndingRef.current) {
+        setStatus("listening");
+        startListeningRef.current();
+      }
     }
-  }, [isListening, status, handleSend, cancelSpeech, startListening]);
+  }, []);
+
 
   const handleEndInterview = useCallback(async () => {
     if (!sessionIdRef.current || isEndingRef.current) return;
@@ -145,30 +233,43 @@ export default function InterviewPage() {
     }
   }, [stopListening, cancelSpeech, navigate]);
 
+  const toggleDebugMode = useCallback(() => {
+    const targetSessionId = sessionIdRef.current ?? paramSessionId;
+    const basePath = targetSessionId ? `/interview/${targetSessionId}` : "/interview/new";
+    navigate(debugTextMode ? basePath : `${basePath}?debugInput=1`);
+  }, [debugTextMode, navigate, paramSessionId]);
+
   return (
-    <div className="relative min-h-screen overflow-hidden font-sans flex flex-col bg-[#82C8FF]">
-      {/* Background — same Vista aurora style */}
+    <div className="relative min-h-screen overflow-hidden flex flex-col bg-[#060608]" style={{ fontFamily: "'Outfit', sans-serif" }}>
+      {/* Grain */}
+      <div
+        className="fixed inset-0 pointer-events-none z-50 opacity-[0.03]"
+        style={{
+          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`,
+          backgroundRepeat: "repeat",
+          backgroundSize: "256px 256px",
+        }}
+      />
+
+      {/* Background */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-[#3BAFDA] via-[#5CB3FF] to-[#A3D9FF]" />
-        <div className="absolute top-[-10%] left-[-10%] w-[120%] h-[50%] bg-[#00A3FF] blur-[120px] opacity-30 rounded-[100%]" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[100%] h-[60%] bg-[#00FFB2] blur-[140px] opacity-20 rounded-[100%]" />
-        <div className="absolute top-[20%] left-[10%] w-[80%] h-[30%] bg-white blur-[90px] opacity-60 rotate-[-15deg]" />
+        <div className="absolute inset-0 bg-[#060608]" />
+        <div className="absolute top-[10%] left-[30%] w-[40%] h-[30%] bg-emerald-500/[0.04] blur-[100px] rounded-full" />
+        <div className="absolute bottom-[10%] right-[20%] w-[30%] h-[30%] bg-indigo-500/[0.03] blur-[80px] rounded-full" />
       </div>
 
       {/* Header */}
       <nav className="relative z-10 w-full px-8 py-5 flex justify-between items-center">
-        <div className="text-xl font-semibold tracking-tight text-white flex items-center gap-3 [text-shadow:0_1px_3px_rgba(0,0,0,0.3)]">
-          <div className="relative w-8 h-8 rounded-full bg-gradient-to-br from-[#4facfe] to-[#00f2fe] shadow-[0_2px_8px_rgba(0,0,0,0.2),_inset_0_2px_4px_rgba(255,255,255,0.8)] border border-white/60 flex items-center justify-center overflow-hidden">
-            <div className="absolute top-0 inset-x-0 h-[60%] bg-gradient-to-b from-white/90 to-transparent rounded-b-full opacity-80" />
-          </div>
+        <div className="text-lg font-semibold tracking-tight text-white/90 flex items-center gap-2.5">
+          <div className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.6)]" />
           interview.me
         </div>
         <button
           onClick={handleEndInterview}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-red-500/80 backdrop-blur-xl border border-red-400/50 text-white font-medium text-sm hover:bg-red-500 transition-all shadow-lg"
+          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/[0.04] border border-white/[0.06] text-white/50 font-medium text-xs tracking-wide hover:bg-red-500/10 hover:border-red-500/20 hover:text-red-400 transition-all duration-300"
         >
-          <PhoneOff className="w-4 h-4" />
-          End Interview
+          <PhoneOff className="w-3.5 h-3.5" />
+          End
         </button>
       </nav>
 
@@ -185,28 +286,70 @@ export default function InterviewPage() {
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="max-w-xl w-full min-h-[80px] text-center"
+          className="max-w-lg w-full min-h-[80px] text-center"
         >
-          <p className="text-white/90 text-lg leading-relaxed [text-shadow:0_1px_3px_rgba(0,0,0,0.2)]">
+          <p className="text-white/50 text-base leading-relaxed font-light">
             {status === "listening" && transcript ? (
-              <span className="italic text-white/70">{transcript}</span>
+              <span className="italic text-white/30">{transcript}</span>
             ) : (
               currentText
             )}
           </p>
         </motion.div>
 
-        {/* Mic button */}
-        <MicButton
-          isListening={isListening}
-          onClick={handleMicToggle}
-          disabled={status === "initializing" || status === "processing" || status === "ended" || !supported}
-        />
+        {/* Gesture prompt (needed on first load to unblock browser TTS) */}
+        {!debugTextMode && needsGesture && (
+          <button
+            onClick={handleGestureUnblock}
+            className="px-6 py-3 rounded-2xl bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 font-medium text-sm tracking-wide hover:bg-emerald-500/30 transition-all duration-300 animate-pulse"
+          >
+            Tap to start interview
+          </button>
+        )}
 
-        {!supported && (
-          <p className="text-red-200 text-sm">
+        {!debugTextMode && !supported && (
+          <p className="text-red-400/60 text-xs font-light">
             Speech recognition is not supported in this browser. Try Chrome.
           </p>
+        )}
+
+        {showDebugInput && (
+          <div className="w-full max-w-lg rounded-2xl border border-white/[0.08] bg-white/[0.03] p-4 space-y-3">
+            <div className="flex items-center justify-between gap-4">
+              <div className="text-[11px] uppercase tracking-[0.2em] text-white/30">
+                Debug Controls
+              </div>
+              <button
+                onClick={toggleDebugMode}
+                className="rounded-lg border border-white/[0.08] px-3 py-1.5 text-[11px] uppercase tracking-[0.18em] text-white/45 transition-colors hover:text-white/70"
+              >
+                {debugTextMode ? "Use Voice" : "Use Text Input"}
+              </button>
+            </div>
+            <div className="text-xs text-white/35">
+              {debugTextMode ? "Text mode is active for this interview session." : "Voice mode is active. Switch to text mode for debugging."}
+            </div>
+            {debugTextMode && (
+              <>
+                <textarea
+                  value={debugAnswer}
+                  onChange={(event) => setDebugAnswer(event.target.value)}
+                  placeholder="Type an answer for testing..."
+                  className="min-h-28 w-full resize-none rounded-xl border border-white/[0.08] bg-black/20 px-4 py-3 text-sm text-white/80 outline-none placeholder:text-white/25 focus:border-emerald-400/40"
+                  disabled={status === "initializing" || status === "processing" || status === "ended"}
+                />
+                <div className="flex justify-end">
+                  <button
+                    onClick={handleDebugSubmit}
+                    disabled={!debugAnswer.trim() || status === "initializing" || status === "processing" || status === "ended"}
+                    className="rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-300 transition-all duration-300 hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:border-white/[0.06] disabled:bg-white/[0.03] disabled:text-white/25"
+                  >
+                    Send Debug Answer
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         )}
       </main>
     </div>
