@@ -27,7 +27,8 @@ services:
       SERPER_API_KEY: ${SERPER_API_KEY:-}
       JINA_API_KEY: ${JINA_API_KEY:-}
       PORT: "3001"
-      NODE_ENV: production
+      LOG_LLM_PAYLOADS: ${LOG_LLM_PAYLOADS:-}
+      NODE_ENV: development
     depends_on:
       postgres:
         condition: service_healthy
