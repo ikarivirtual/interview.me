@@ -108,7 +108,7 @@ export default function ReportPage() {
 
       {/* Content */}
       <main className="relative z-10 flex-1 flex flex-col items-center p-6 pb-20">
-        {loading ? (
+        {(!report || report.scores === null) ? (
           <div className="flex-1 flex flex-col items-center justify-center gap-5">
             <motion.div
               animate={{ rotate: 360 }}
@@ -116,11 +116,16 @@ export default function ReportPage() {
             >
               <Loader2 className="w-8 h-8 text-white/20" />
             </motion.div>
-            <p className="text-white/25 text-sm font-light">
-              Generating your interview report...
+            <p className="text-white/25 text-sm font-light text-center">
+              {loading ? "Generating your interview report..." : "Calculating overall assessment and scores..."}
             </p>
+            {!loading && (
+              <p className="text-white/20 text-xs font-light">
+                Loading stats score
+              </p>
+            )}
           </div>
-        ) : report ? (
+        ) : (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -137,37 +142,28 @@ export default function ReportPage() {
               </p>
             </div>
 
-            {report.scores && <ScoreGrid scores={report.scores} />}
+            <ScoreGrid scores={report.scores} />
 
             {/* Report content */}
             <div className="bg-white/[0.02] border border-white/[0.05] rounded-2xl p-8">
               {renderMarkdown(report.content)}
-              {streaming && (
-                <motion.span
-                  animate={{ opacity: [1, 0, 1] }}
-                  transition={{ duration: 0.8, repeat: Infinity }}
-                  className="inline-block w-[2px] h-4 bg-emerald-400/60 ml-0.5 align-text-bottom"
-                />
-              )}
             </div>
 
-            {!streaming && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.3 }}
-                className="flex justify-center"
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.3 }}
+              className="flex justify-center"
+            >
+              <button
+                onClick={() => navigate("/")}
+                className="px-6 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.06] text-white/50 font-medium text-sm hover:bg-white/[0.08] hover:text-white/70 transition-all duration-300"
               >
-                <button
-                  onClick={() => navigate("/")}
-                  className="px-6 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.06] text-white/50 font-medium text-sm hover:bg-white/[0.08] hover:text-white/70 transition-all duration-300"
-                >
-                  Start New Interview
-                </button>
-              </motion.div>
-            )}
+                Start New Interview
+              </button>
+            </motion.div>
           </motion.div>
-        ) : null}
+        )}
       </main>
     </div>
   );
