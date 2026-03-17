@@ -97,10 +97,10 @@ npm install
 #### 4. Configure environment
 
 ```bash
-cp backend/.env.example backend/.env
+cp backend/.env.example .env
 ```
 
-Edit `backend/.env`:
+Edit `.env`:
 ```
 DATABASE_URL=postgresql://your-username@localhost:5432/interviewme
 DO_MODEL_ACCESS_KEY=your-key-from-digitalocean

@@ -16,7 +16,7 @@ function delay(ms: number) {
 export default function InterviewPage() {
   const { sessionId: paramSessionId } = useParams();
   const [searchParams] = useSearchParams();
-  const debugTextMode = true && searchParams.get("debugInput") === "1";
+  const debugTextMode = searchParams.get("debugInput") === "1";
   const navigate = useNavigate();
 
   const [status, setStatus] = useState<InterviewStatus>("initializing");
@@ -312,7 +312,7 @@ export default function InterviewPage() {
           </p>
         )}
 
-        {true && (
+        {(
           <div className="w-full max-w-lg rounded-2xl border border-white/[0.08] bg-white/[0.03] p-4 space-y-3">
             <div className="flex items-center justify-between gap-4">
               <div className="text-[11px] uppercase tracking-[0.2em] text-white/30">

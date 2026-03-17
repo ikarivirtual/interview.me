@@ -1,7 +1,8 @@
 import { config } from "dotenv";
 import { resolve } from "path";
 
-// Load .env from repo root (works for both `npm run dev -w backend` and direct runs)
+// Support both the Docker quick-start root `.env` and the manual setup `backend/.env`.
+config({ path: resolve(import.meta.dirname, "../../.env") });
 config({ path: resolve(import.meta.dirname, "../../../.env") });
 
 function required(key: string): string {
