@@ -6,6 +6,7 @@ import { errorHandler } from "./middleware/errorHandler.js";
 import sessionsRouter from "./routes/sessions.js";
 import chatRouter from "./routes/chat.js";
 import reportsRouter from "./routes/reports.js";
+import ttsRouter from "./routes/tts.js";
 
 const app = express();
 
@@ -16,6 +17,7 @@ app.use(express.json({ limit: "1mb" }));
 app.use("/api/sessions", sessionsRouter);
 app.use("/api/chat", chatRouter);
 app.use("/api/sessions", reportsRouter);
+app.use("/api/tts", ttsRouter);
 
 // Health check
 app.get("/api/health", (_req, res) => {

@@ -23,4 +23,5 @@ export const env = {
   NODE_ENV: process.env.NODE_ENV || "development",
   SERPER_API_KEY: process.env.SERPER_API_KEY || "",
   JINA_API_KEY: process.env.JINA_API_KEY || "",
+  ELEVENLABS_API_KEY: process.env.ELEVENLABS_API_KEY || "",
 };

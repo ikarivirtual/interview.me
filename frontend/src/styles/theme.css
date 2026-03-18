@@ -176,4 +176,13 @@
     font-weight: var(--font-weight-normal);
     line-height: 1.5;
   }
+
+  .rpt-inline-code {
+    font-family: ui-monospace, 'SF Mono', Monaco, 'Cascadia Code', monospace;
+    font-size: 0.8em;
+    padding: 0.15em 0.4em;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.06);
+    color: rgba(52, 211, 153, 0.7);
+  }
 }

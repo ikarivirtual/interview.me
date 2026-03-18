@@ -23,8 +23,6 @@ export default function InterviewPage() {
   const [sessionId, setSessionId] = useState<string | null>(paramSessionId || null);
   const [currentText, setCurrentText] = useState("");
   const [debugAnswer, setDebugAnswer] = useState("");
-  const [needsGesture, setNeedsGesture] = useState(false);
-  const pendingTextRef = useRef<string | null>(null);
   const sessionIdRef = useRef(sessionId);
   const isEndingRef = useRef(false);
   const initRef = useRef(false);
@@ -51,27 +49,6 @@ export default function InterviewPage() {
     if (isEndingRef.current || !text.trim()) return;
     setCurrentText(text);
     setStatus("ai_speaking");
-
-    // Test if TTS is allowed (browsers block it without a user gesture)
-    const testUtterance = new SpeechSynthesisUtterance("");
-    let ttsBlocked = false;
-    try {
-      window.speechSynthesis.speak(testUtterance);
-      // If speaking queue is empty right after, TTS was blocked
-      if (!window.speechSynthesis.speaking && !window.speechSynthesis.pending) {
-        ttsBlocked = true;
-      }
-      window.speechSynthesis.cancel();
-    } catch {
-      ttsBlocked = true;
-    }
-
-    if (ttsBlocked) {
-      // Need a user click before we can play audio
-      pendingTextRef.current = text;
-      setNeedsGesture(true);
-      return;
-    }
 
     await speakRef.current(text);
     if (!isEndingRef.current) {
@@ -201,20 +178,6 @@ export default function InterviewPage() {
     handleSendRef.current = handleSend;
   }, [handleSend]);
 
-  // Resume TTS after user gesture unblocks audio
-  const handleGestureUnblock = useCallback(async () => {
-    setNeedsGesture(false);
-    const text = pendingTextRef.current;
-    pendingTextRef.current = null;
-    if (text) {
-      await speakRef.current(text);
-      if (!isEndingRef.current) {
-        setStatus("listening");
-        startListeningRef.current();
-      }
-    }
-  }, []);
-
 
   const handleEndInterview = useCallback(async () => {
     if (!sessionIdRef.current || isEndingRef.current) return;
@@ -296,17 +259,7 @@ export default function InterviewPage() {
           </p>
         </motion.div>
 
-        {/* Gesture prompt (needed on first load to unblock browser TTS) */}
-        {!debugTextMode && needsGesture && (
-          <button
-            onClick={handleGestureUnblock}
-            className="px-6 py-3 rounded-2xl bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 font-medium text-sm tracking-wide hover:bg-emerald-500/30 transition-all duration-300 animate-pulse"
-          >
-            Tap to start interview
-          </button>
-        )}
-
-        {!debugTextMode && !supported && (
+{!debugTextMode && !supported && (
           <p className="text-red-400/60 text-xs font-light">
             Speech recognition is not supported in this browser. Try Chrome.
           </p>

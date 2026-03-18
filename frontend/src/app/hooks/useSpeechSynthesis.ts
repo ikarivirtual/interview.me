@@ -6,120 +6,181 @@ interface SpeechSynthesisResult {
   cancel: () => void;
 }
 
+function speakWithBrowserTTS(text: string): Promise<void> {
+  return new Promise((resolve) => {
+    if (!window.speechSynthesis) {
+      resolve();
+      return;
+    }
+    window.speechSynthesis.cancel();
+
+    const chunks = text.match(/[^.!?]+[.!?]+\s*/g) || [text];
+    const voices = window.speechSynthesis.getVoices();
+    const preferred = voices.find(
+      (v) => v.name.includes("Samantha") || v.name.includes("Google") || v.lang === "en-US",
+    );
+
+    let i = 0;
+    const speakNext = () => {
+      if (i >= chunks.length) { resolve(); return; }
+      const utt = new SpeechSynthesisUtterance(chunks[i]);
+      utt.rate = 1.05;
+      if (preferred) utt.voice = preferred;
+      utt.onend = () => { i++; speakNext(); };
+      utt.onerror = () => resolve();
+      window.speechSynthesis.speak(utt);
+    };
+    speakNext();
+  });
+}
+
 export function useSpeechSynthesis(): SpeechSynthesisResult {
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
   const resolveRef = useRef<(() => void) | null>(null);
-  const voicesRef = useRef<SpeechSynthesisVoice[]>([]);
+  const objectUrlRef = useRef<string | null>(null);
+  const usingBrowserTTSRef = useRef(false);
 
-  // Load voices (Chrome loads them async)
-  useEffect(() => {
-    if (typeof window === "undefined" || !window.speechSynthesis) return;
-
-    const loadVoices = () => {
-      voicesRef.current = window.speechSynthesis.getVoices();
-    };
-
-    loadVoices();
-    window.speechSynthesis.addEventListener("voiceschanged", loadVoices);
-    return () => {
-      window.speechSynthesis.removeEventListener("voiceschanged", loadVoices);
-    };
-  }, []);
-
-  // Cleanup on unmount — stop any playing speech and resolve dangling promises
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
-      window.speechSynthesis?.cancel();
+      abortRef.current?.abort();
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+      if (objectUrlRef.current) {
+        URL.revokeObjectURL(objectUrlRef.current);
+        objectUrlRef.current = null;
+      }
+      if (usingBrowserTTSRef.current) {
+        window.speechSynthesis?.cancel();
+      }
       if (resolveRef.current) {
         resolveRef.current();
         resolveRef.current = null;
       }
-      utteranceRef.current = null;
     };
   }, []);
 
   const speak = useCallback((text: string): Promise<void> => {
     return new Promise((resolve) => {
-      if (typeof window === "undefined" || !window.speechSynthesis) {
-        resolve();
-        return;
-      }
-
-      // Resolve any previous pending promise before starting a new one
+      // Resolve any previous pending promise
       if (resolveRef.current) {
         resolveRef.current();
         resolveRef.current = null;
       }
 
-      window.speechSynthesis.cancel();
-      utteranceRef.current = null;
-
-      // Split into sentences to avoid Chrome's ~15s TTS cutoff bug
-      const chunks = text.match(/[^.!?]+[.!?]+\s*/g) || [text];
-
-      const voices = voicesRef.current;
-      const preferred = voices.find(
-        (v) => v.name.includes("Samantha") || v.name.includes("Google") || v.lang === "en-US",
-      );
+      // Cancel any in-progress audio
+      abortRef.current?.abort();
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+      if (objectUrlRef.current) {
+        URL.revokeObjectURL(objectUrlRef.current);
+        objectUrlRef.current = null;
+      }
+      if (usingBrowserTTSRef.current) {
+        window.speechSynthesis?.cancel();
+        usingBrowserTTSRef.current = false;
+      }
 
       resolveRef.current = resolve;
-      let chunkIndex = 0;
+      const controller = new AbortController();
+      abortRef.current = controller;
 
-      const speakNext = () => {
-        if (chunkIndex >= chunks.length || !resolveRef.current) {
-          setIsSpeaking(false);
-          utteranceRef.current = null;
-          if (resolveRef.current) {
-            resolveRef.current();
-            resolveRef.current = null;
-          }
-          return;
-        }
+      setIsSpeaking(true);
 
-        const utterance = new SpeechSynthesisUtterance(chunks[chunkIndex]);
-        utterance.rate = 1.05;
-        utterance.pitch = 1;
-        if (preferred) utterance.voice = preferred;
+      fetch("/api/tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+        signal: controller.signal,
+      })
+        .then((res) => {
+          if (!res.ok) throw new Error(`TTS failed: ${res.status}`);
+          return res.blob();
+        })
+        .then((blob) => {
+          if (controller.signal.aborted) return;
 
-        utteranceRef.current = utterance;
+          const url = URL.createObjectURL(blob);
+          objectUrlRef.current = url;
 
-        utterance.onstart = () => {
-          if (utteranceRef.current === utterance) {
-            setIsSpeaking(true);
-          }
-        };
+          const audio = new Audio(url);
+          audioRef.current = audio;
 
-        utterance.onend = () => {
-          if (utteranceRef.current === utterance) {
-            chunkIndex++;
-            speakNext();
-          }
-        };
-
-        utterance.onerror = () => {
-          if (utteranceRef.current === utterance) {
+          audio.onended = () => {
             setIsSpeaking(false);
-            utteranceRef.current = null;
+            audioRef.current = null;
+            if (objectUrlRef.current) {
+              URL.revokeObjectURL(objectUrlRef.current);
+              objectUrlRef.current = null;
+            }
             if (resolveRef.current) {
               resolveRef.current();
               resolveRef.current = null;
             }
+          };
+
+          audio.onerror = () => {
+            setIsSpeaking(false);
+            audioRef.current = null;
+            if (objectUrlRef.current) {
+              URL.revokeObjectURL(objectUrlRef.current);
+              objectUrlRef.current = null;
+            }
+            if (resolveRef.current) {
+              resolveRef.current();
+              resolveRef.current = null;
+            }
+          };
+
+          audio.play().catch(() => {
+            setIsSpeaking(false);
+            if (resolveRef.current) {
+              resolveRef.current();
+              resolveRef.current = null;
+            }
+          });
+        })
+        .catch(async (err) => {
+          if (err.name === "AbortError") return;
+          console.warn("[TTS] ElevenLabs unavailable, falling back to browser TTS:", err.message);
+
+          // Fallback to browser speech synthesis
+          usingBrowserTTSRef.current = true;
+          try {
+            await speakWithBrowserTTS(text);
+          } catch {
+            // ignore
           }
-        };
-
-        window.speechSynthesis.speak(utterance);
-      };
-
-      speakNext();
+          usingBrowserTTSRef.current = false;
+          setIsSpeaking(false);
+          if (resolveRef.current) {
+            resolveRef.current();
+            resolveRef.current = null;
+          }
+        });
     });
   }, []);
 
   const cancel = useCallback(() => {
-    if (typeof window !== "undefined" && window.speechSynthesis) {
-      window.speechSynthesis.cancel();
+    abortRef.current?.abort();
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
     }
-    utteranceRef.current = null;
+    if (objectUrlRef.current) {
+      URL.revokeObjectURL(objectUrlRef.current);
+      objectUrlRef.current = null;
+    }
+    if (usingBrowserTTSRef.current) {
+      window.speechSynthesis?.cancel();
+      usingBrowserTTSRef.current = false;
+    }
     setIsSpeaking(false);
     if (resolveRef.current) {
       resolveRef.current();

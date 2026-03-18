@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion } from "motion/react";
 import { ArrowLeft, Loader2 } from "lucide-react";
@@ -10,12 +10,150 @@ interface ReportData {
   scores: Record<string, number> | null;
 }
 
+function stripScoresSection(content: string): string {
+  return content
+    // Remove SCORES_JSON line
+    .replace(/SCORES_JSON:\s*\{[^}]*\}?/, "")
+    // Remove trailing "Scores" / "Score Summary" header and anything after it
+    .replace(/\n#{1,3}\s*[Ss]core[s]?\b.*$/s, "")
+    .trim();
+}
+
+// ── Markdown parser ──────────────────────────────────────────────────
+
+type Block =
+  | { type: "h1"; text: string }
+  | { type: "h2"; text: string }
+  | { type: "h3"; text: string }
+  | { type: "hr" }
+  | { type: "blockquote"; lines: string[] }
+  | { type: "ul"; items: string[] }
+  | { type: "ol"; items: string[] }
+  | { type: "table"; headers: string[]; alignments: ("left" | "center" | "right")[]; rows: string[][] }
+  | { type: "code"; lang: string; code: string }
+  | { type: "p"; text: string }
+  | { type: "blank" };
+
+function parseBlocks(md: string): Block[] {
+  const lines = md.split("\n");
+  const blocks: Block[] = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+
+    // Fenced code block
+    if (line.startsWith("```")) {
+      const lang = line.slice(3).trim();
+      const codeLines: string[] = [];
+      i++;
+      while (i < lines.length && !lines[i].startsWith("```")) {
+        codeLines.push(lines[i]);
+        i++;
+      }
+      blocks.push({ type: "code", lang, code: codeLines.join("\n") });
+      i++;
+      continue;
+    }
+
+    // Horizontal rule
+    if (/^(\*{3,}|-{3,}|_{3,})\s*$/.test(line)) {
+      blocks.push({ type: "hr" });
+      i++;
+      continue;
+    }
+
+    // Headers
+    if (line.startsWith("### ")) { blocks.push({ type: "h3", text: line.slice(4) }); i++; continue; }
+    if (line.startsWith("## ")) { blocks.push({ type: "h2", text: line.slice(3) }); i++; continue; }
+    if (line.startsWith("# ")) { blocks.push({ type: "h1", text: line.slice(2) }); i++; continue; }
+
+    // Blockquote
+    if (line.startsWith("> ")) {
+      const bqLines: string[] = [];
+      while (i < lines.length && lines[i].startsWith("> ")) {
+        bqLines.push(lines[i].slice(2));
+        i++;
+      }
+      blocks.push({ type: "blockquote", lines: bqLines });
+      continue;
+    }
+
+    // Table: detect header row followed by separator row
+    if (i + 1 < lines.length && line.includes("|") && /^\|?[\s:]*-+[\s:]*(\|[\s:]*-+[\s:]*)*\|?\s*$/.test(lines[i + 1])) {
+      const parseRow = (row: string) =>
+        row.replace(/^\|/, "").replace(/\|$/, "").split("|").map((c) => c.trim());
+
+      const headers = parseRow(line);
+      const sepCells = parseRow(lines[i + 1]);
+      const alignments = sepCells.map((c): "left" | "center" | "right" => {
+        if (c.startsWith(":") && c.endsWith(":")) return "center";
+        if (c.endsWith(":")) return "right";
+        return "left";
+      });
+      i += 2;
+      const rows: string[][] = [];
+      while (i < lines.length && lines[i].includes("|")) {
+        rows.push(parseRow(lines[i]));
+        i++;
+      }
+      blocks.push({ type: "table", headers, alignments, rows });
+      continue;
+    }
+
+    // Unordered list
+    if (/^[\-\*] /.test(line)) {
+      const items: string[] = [];
+      while (i < lines.length && /^[\-\*] /.test(lines[i])) {
+        items.push(lines[i].slice(2));
+        i++;
+      }
+      blocks.push({ type: "ul", items });
+      continue;
+    }
+
+    // Ordered list
+    if (/^\d+\.\s/.test(line)) {
+      const items: string[] = [];
+      while (i < lines.length && /^\d+\.\s/.test(lines[i])) {
+        items.push(lines[i].replace(/^\d+\.\s/, ""));
+        i++;
+      }
+      blocks.push({ type: "ol", items });
+      continue;
+    }
+
+    // Blank line
+    if (line.trim() === "") {
+      blocks.push({ type: "blank" });
+      i++;
+      continue;
+    }
+
+    // Paragraph
+    blocks.push({ type: "p", text: line });
+    i++;
+  }
+
+  return blocks;
+}
+
+function renderInline(text: string): string {
+  return text
+    .replace(/`([^`]+)`/g, '<code class="rpt-inline-code">$1</code>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong class="text-white/75 font-medium">$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>');
+}
+
+// ── Component ────────────────────────────────────────────────────────
+
 export default function ReportPage() {
   const { sessionId } = useParams();
   const navigate = useNavigate();
   const [report, setReport] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(true);
-  
+  const [streaming, setStreaming] = useState(false);
+
   const contentRef = useRef("");
 
   useEffect(() => {
@@ -28,18 +166,32 @@ export default function ReportPage() {
       try {
         
         setLoading(false);
+        setStreaming(true);
+
+        let parsedScores: Record<string, number> | null = null;
 
         const { scores } = await streamReport(sessionId!, (token) => {
           if (cancelled) return;
           contentRef.current += token;
-          setReport({ content: contentRef.current, scores: null });
+
+          // Try to parse scores early from the streamed content
+          if (!parsedScores) {
+            const match = contentRef.current.match(/SCORES_JSON:\s*(\{[^}]+\})/);
+            if (match) {
+              try {
+                parsedScores = JSON.parse(match[1]);
+              } catch { /* wait for complete JSON */ }
+            }
+          }
+
+          const displayContent = stripScoresSection(contentRef.current);
+          setReport({ content: displayContent, scores: parsedScores });
         });
 
         if (!cancelled) {
-          // Strip SCORES_JSON line from displayed content
-          const cleanContent = contentRef.current.replace(/SCORES_JSON:\s*\{[^}]+\}/, "").trim();
-          setReport({ content: cleanContent, scores });
-          
+          const cleanContent = stripScoresSection(contentRef.current);
+          setReport({ content: cleanContent, scores: scores ?? parsedScores });
+          setStreaming(false);
         }
       } catch (err) {
         console.error("Failed to stream report:", err);
@@ -54,23 +206,7 @@ export default function ReportPage() {
     return () => { cancelled = true; };
   }, [sessionId]);
 
-  // Simple markdown-to-HTML (bold, headers, bullets)
-  function renderMarkdown(md: string) {
-    return md.split("\n").map((line, i) => {
-      if (line.startsWith("### ")) return <h3 key={i} className="text-sm font-semibold text-white/80 mt-6 mb-2 uppercase tracking-wider">{line.slice(4)}</h3>;
-      if (line.startsWith("## ")) return <h2 key={i} className="text-lg font-semibold text-white/90 mt-8 mb-3">{line.slice(3)}</h2>;
-      if (line.startsWith("# ")) return <h1 key={i} className="text-xl font-semibold text-white mt-8 mb-4" style={{ fontFamily: "'Instrument Serif', serif" }}>{line.slice(2)}</h1>;
-      if (line.startsWith("- ") || line.startsWith("* ")) {
-        const content = line.slice(2).replace(/\*\*(.+?)\*\*/g, "<strong class='text-white/80 font-medium'>$1</strong>");
-        return (
-          <li key={i} className="text-white/50 ml-4 mb-1.5 font-light text-sm leading-relaxed list-disc" dangerouslySetInnerHTML={{ __html: content }} />
-        );
-      }
-      if (line.trim() === "") return <div key={i} className="h-2" />;
-      const content = line.replace(/\*\*(.+?)\*\*/g, "<strong class='text-white/80 font-medium'>$1</strong>");
-      return <p key={i} className="text-white/50 mb-2 leading-relaxed font-light text-sm" dangerouslySetInnerHTML={{ __html: content }} />;
-    });
-  }
+  const blocks = useMemo(() => report ? parseBlocks(report.content) : [], [report]);
 
   return (
     <div className="relative min-h-screen overflow-hidden flex flex-col bg-[#060608]" style={{ fontFamily: "'Outfit', sans-serif" }}>
@@ -137,7 +273,7 @@ export default function ReportPage() {
               <h1 className="text-3xl font-light text-white/90 italic" style={{ fontFamily: "'Instrument Serif', serif" }}>
                 Performance Report
               </h1>
-              <p className="text-white/20 text-xs tracking-widest uppercase font-medium">
+              <p className="text-white/20 text-xs tracking-[0.25em] uppercase font-medium">
                 Interview Analysis
               </p>
             </div>
@@ -145,8 +281,107 @@ export default function ReportPage() {
             <ScoreGrid scores={report.scores} />
 
             {/* Report content */}
-            <div className="bg-white/[0.02] border border-white/[0.05] rounded-2xl p-8">
-              {renderMarkdown(report.content)}
+            <div className="bg-white/[0.02] border border-white/[0.05] rounded-2xl p-8 md:p-10 report-content">
+              {blocks.map((block, i) => {
+                switch (block.type) {
+                  case "h1":
+                    return (
+                      <h1 key={i} className="text-xl font-light text-white/90 mt-10 mb-4 first:mt-0" style={{ fontFamily: "'Instrument Serif', serif" }}>
+                        {block.text}
+                      </h1>
+                    );
+                  case "h2":
+                    return (
+                      <h2 key={i} className="text-lg font-medium text-white/85 mt-9 mb-3 first:mt-0">
+                        {block.text}
+                      </h2>
+                    );
+                  case "h3":
+                    return (
+                      <h3 key={i} className="text-[13px] font-semibold text-white/60 mt-7 mb-2 uppercase tracking-[0.15em] first:mt-0">
+                        {block.text}
+                      </h3>
+                    );
+                  case "hr":
+                    return <hr key={i} className="border-none h-px bg-white/[0.06] my-8" />;
+                  case "blockquote":
+                    return (
+                      <blockquote key={i} className="border-l-2 border-emerald-500/30 pl-4 my-4">
+                        {block.lines.map((line, j) => (
+                          <p key={j} className="text-white/45 text-sm leading-relaxed font-light italic" dangerouslySetInnerHTML={{ __html: renderInline(line) }} />
+                        ))}
+                      </blockquote>
+                    );
+                  case "ul":
+                    return (
+                      <ul key={i} className="my-3 space-y-1.5">
+                        {block.items.map((item, j) => (
+                          <li key={j} className="text-white/50 ml-4 font-light text-sm leading-relaxed list-disc marker:text-white/15" dangerouslySetInnerHTML={{ __html: renderInline(item) }} />
+                        ))}
+                      </ul>
+                    );
+                  case "ol":
+                    return (
+                      <ol key={i} className="my-3 space-y-1.5 list-decimal">
+                        {block.items.map((item, j) => (
+                          <li key={j} className="text-white/50 ml-4 font-light text-sm leading-relaxed marker:text-white/25" dangerouslySetInnerHTML={{ __html: renderInline(item) }} />
+                        ))}
+                      </ol>
+                    );
+                  case "table":
+                    return (
+                      <div key={i} className="my-6 overflow-x-auto rounded-lg border border-white/[0.06]">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b border-white/[0.08] bg-white/[0.03]">
+                              {block.headers.map((h, j) => (
+                                <th
+                                  key={j}
+                                  className="px-4 py-2.5 text-[11px] font-semibold text-white/50 uppercase tracking-[0.15em]"
+                                  style={{ textAlign: block.alignments[j] || "left" }}
+                                  dangerouslySetInnerHTML={{ __html: renderInline(h) }}
+                                />
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {block.rows.map((row, ri) => (
+                              <tr key={ri} className="border-b border-white/[0.04] last:border-0 hover:bg-white/[0.02] transition-colors">
+                                {row.map((cell, ci) => (
+                                  <td
+                                    key={ci}
+                                    className="px-4 py-2.5 text-white/45 font-light"
+                                    style={{ textAlign: block.alignments[ci] || "left" }}
+                                    dangerouslySetInnerHTML={{ __html: renderInline(cell) }}
+                                  />
+                                ))}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    );
+                  case "code":
+                    return (
+                      <pre key={i} className="my-4 rounded-lg bg-black/40 border border-white/[0.06] p-4 overflow-x-auto">
+                        <code className="text-[13px] text-emerald-300/70 font-mono leading-relaxed">{block.code}</code>
+                      </pre>
+                    );
+                  case "blank":
+                    return <div key={i} className="h-2" />;
+                  case "p":
+                    return (
+                      <p key={i} className="text-white/50 mb-2.5 leading-relaxed font-light text-sm" dangerouslySetInnerHTML={{ __html: renderInline(block.text) }} />
+                    );
+                }
+              })}
+              {streaming && (
+                <motion.span
+                  animate={{ opacity: [1, 0, 1] }}
+                  transition={{ duration: 0.8, repeat: Infinity }}
+                  className="inline-block w-[2px] h-4 bg-emerald-400/60 ml-0.5 align-text-bottom"
+                />
+              )}
             </div>
 
             <motion.div
