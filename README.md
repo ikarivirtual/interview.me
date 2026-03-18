@@ -59,6 +59,7 @@ DO_MODEL_ACCESS_KEY=your-key-from-digitalocean
 SERPER_API_KEY=your-serper-key
 JINA_API_KEY=
 ELEVENLABS_API_KEY=your-elevenlabs-key
+ELEVENLABS_VOICE_ID=your-voice-id
 ```
 3. Run:
 ```bash
