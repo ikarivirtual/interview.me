@@ -46,7 +46,7 @@ const MainPage = () => {
   };
 
   return (
-    <div className="relative min-h-screen overflow-hidden flex flex-col selection:bg-emerald-500/30 selection:text-white bg-[#060608]">
+    <div className="relative min-h-screen overflow-hidden flex flex-col selection:bg-blue-500/30 selection:text-white bg-[#050509]">
       {/* Grain texture overlay */}
       <div
         className="fixed inset-0 pointer-events-none z-50 opacity-[0.03]"
@@ -59,20 +59,20 @@ const MainPage = () => {
 
       {/* Background ambient gradient orbs */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute inset-0 bg-[#060608]" />
+        <div className="absolute inset-0 bg-[#050509]" />
         <motion.div
           animate={{
             transform: ["translate(-5%, -5%) scale(1)", "translate(2%, 2%) scale(1.1)", "translate(-5%, -5%) scale(1)"],
           }}
           transition={{ duration: 20, repeat: Infinity, ease: "easeInOut" }}
-          className="absolute top-[-20%] left-[-10%] w-[60%] h-[50%] bg-emerald-500/[0.07] blur-[120px] rounded-full"
+          className="absolute top-[-20%] left-[-10%] w-[60%] h-[50%] bg-blue-500/[0.07] blur-[120px] rounded-full"
         />
         <motion.div
           animate={{
             transform: ["translate(5%, 5%) scale(1)", "translate(-2%, -2%) scale(1.15)", "translate(5%, 5%) scale(1)"],
           }}
           transition={{ duration: 25, repeat: Infinity, ease: "easeInOut" }}
-          className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-indigo-500/[0.05] blur-[140px] rounded-full"
+          className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-blue-500/[0.05] blur-[140px] rounded-full"
         />
         <div className="absolute top-[30%] left-[20%] w-[60%] h-[40%] bg-amber-500/[0.02] blur-[100px] rounded-full" />
       </div>
@@ -91,7 +91,7 @@ const MainPage = () => {
             {/* Navbar */}
             <nav className="w-full px-8 py-6 flex justify-between items-center">
               <div className="text-lg font-semibold tracking-tight text-white/90 flex items-center gap-2.5" style={{ fontFamily: "'Outfit', sans-serif" }}>
-                <div className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.6)]" />
+                <div className="w-2 h-2 rounded-full bg-blue-400 shadow-[0_0_8px_rgba(59,130,246,0.6)]" />
                 interview.me
               </div>
             </nav>
@@ -111,7 +111,7 @@ const MainPage = () => {
                   transition={{ delay: 0.1, duration: 0.5 }}
                   className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/[0.04] border border-white/[0.06] mb-8"
                 >
-                  <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                  <Sparkles className="w-3.5 h-3.5 text-blue-400" />
                   <span className="text-xs font-medium text-white/50 tracking-wide uppercase">AI-Powered Interview Practice</span>
                 </motion.div>
 
@@ -157,7 +157,7 @@ const MainPage = () => {
                 >
                   <div className="relative group">
                     <div className="absolute -inset-[1px] rounded-2xl bg-gradient-to-b from-white/[0.08] to-white/[0.02] pointer-events-none" />
-                    <div className="relative flex items-center bg-white/[0.03] rounded-2xl border border-white/[0.06] overflow-hidden transition-all duration-300 group-focus-within:border-emerald-500/30 group-focus-within:bg-white/[0.05]">
+                    <div className="relative flex items-center bg-white/[0.03] rounded-2xl border border-white/[0.06] overflow-hidden transition-all duration-300 group-focus-within:border-blue-500/30 group-focus-within:bg-white/[0.05]">
                       <input
                         type="url"
                         placeholder="Paste a job posting URL"
@@ -170,7 +170,7 @@ const MainPage = () => {
                       <button
                         type="submit"
                         disabled={!canSubmit}
-                        className="flex-shrink-0 mr-2 px-6 py-2.5 rounded-xl bg-emerald-500 text-white font-medium text-sm hover:bg-emerald-400 transition-all duration-200 disabled:opacity-20 disabled:pointer-events-none flex items-center gap-2 active:scale-[0.97]"
+                        className="flex-shrink-0 mr-2 px-6 py-2.5 rounded-xl bg-blue-500 text-white font-medium text-sm hover:bg-blue-400 transition-all duration-200 disabled:opacity-20 disabled:pointer-events-none flex items-center gap-2 active:scale-[0.97]"
                         style={{ fontFamily: "'Outfit', sans-serif" }}
                       >
                         Start
@@ -183,7 +183,7 @@ const MainPage = () => {
             </main>
 
             {/* Bottom fade */}
-            <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-[#060608] to-transparent pointer-events-none" />
+            <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-[#050509] to-transparent pointer-events-none" />
           </motion.div>
         )}
       </AnimatePresence>

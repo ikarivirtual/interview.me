@@ -10,7 +10,7 @@ export default function ScoreCard({ label, score, index }: ScoreCardProps) {
   const percentage = (score / 10) * 100;
 
   const getAccentColor = () => {
-    if (score >= 8) return { bar: "from-emerald-400 to-emerald-500", text: "text-emerald-400", glow: "rgba(52,211,153,0.15)" };
+    if (score >= 8) return { bar: "from-blue-400 to-blue-500", text: "text-blue-400", glow: "rgba(96,165,250,0.15)" };
     if (score >= 6) return { bar: "from-sky-400 to-cyan-500", text: "text-sky-400", glow: "rgba(56,189,248,0.15)" };
     if (score >= 4) return { bar: "from-amber-400 to-orange-500", text: "text-amber-400", glow: "rgba(251,191,36,0.15)" };
     return { bar: "from-red-400 to-red-500", text: "text-red-400", glow: "rgba(248,113,113,0.15)" };

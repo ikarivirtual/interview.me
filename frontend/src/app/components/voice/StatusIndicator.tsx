@@ -8,7 +8,7 @@ interface StatusIndicatorProps {
 
 const statusConfig: Record<InterviewStatus, { label: string; color: string; dotColor: string }> = {
   initializing: { label: "Setting up...", color: "text-white/30", dotColor: "bg-white/30" },
-  ai_speaking: { label: "Speaking", color: "text-emerald-400/80", dotColor: "bg-emerald-400" },
+  ai_speaking: { label: "Speaking", color: "text-blue-400/80", dotColor: "bg-blue-400" },
   listening: { label: "Listening", color: "text-sky-400/80", dotColor: "bg-sky-400" },
   processing: { label: "Thinking", color: "text-amber-400/80", dotColor: "bg-amber-400" },
   ended: { label: "Complete", color: "text-white/40", dotColor: "bg-white/40" },

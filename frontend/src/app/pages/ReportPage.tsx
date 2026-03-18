@@ -209,7 +209,7 @@ export default function ReportPage() {
   const blocks = useMemo(() => report ? parseBlocks(report.content) : [], [report]);
 
   return (
-    <div className="relative min-h-screen overflow-hidden flex flex-col bg-[#060608]" style={{ fontFamily: "'Outfit', sans-serif" }}>
+    <div className="relative min-h-screen overflow-hidden flex flex-col bg-[#050509]" style={{ fontFamily: "'Outfit', sans-serif" }}>
       {/* Grain */}
       <div
         className="fixed inset-0 pointer-events-none z-50 opacity-[0.03]"
@@ -222,15 +222,15 @@ export default function ReportPage() {
 
       {/* Background */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute inset-0 bg-[#060608]" />
-        <div className="absolute top-[5%] left-[20%] w-[40%] h-[20%] bg-emerald-500/[0.03] blur-[80px] rounded-full" />
-        <div className="absolute bottom-[20%] right-[10%] w-[30%] h-[20%] bg-indigo-500/[0.03] blur-[80px] rounded-full" />
+        <div className="absolute inset-0 bg-[#050509]" />
+        <div className="absolute top-[5%] left-[20%] w-[40%] h-[20%] bg-blue-500/[0.03] blur-[80px] rounded-full" />
+        <div className="absolute bottom-[20%] right-[10%] w-[30%] h-[20%] bg-blue-500/[0.03] blur-[80px] rounded-full" />
       </div>
 
       {/* Header */}
       <nav className="relative z-10 w-full px-8 py-5 flex justify-between items-center">
         <div className="text-lg font-semibold tracking-tight text-white/90 flex items-center gap-2.5">
-          <div className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.6)]" />
+          <div className="w-2 h-2 rounded-full bg-blue-400 shadow-[0_0_8px_rgba(59,130,246,0.6)]" />
           interview.me
         </div>
         <button
@@ -306,7 +306,7 @@ export default function ReportPage() {
                     return <hr key={i} className="border-none h-px bg-white/[0.06] my-8" />;
                   case "blockquote":
                     return (
-                      <blockquote key={i} className="border-l-2 border-emerald-500/30 pl-4 my-4">
+                      <blockquote key={i} className="border-l-2 border-blue-500/30 pl-4 my-4">
                         {block.lines.map((line, j) => (
                           <p key={j} className="text-white/45 text-sm leading-relaxed font-light italic" dangerouslySetInnerHTML={{ __html: renderInline(line) }} />
                         ))}
@@ -364,7 +364,7 @@ export default function ReportPage() {
                   case "code":
                     return (
                       <pre key={i} className="my-4 rounded-lg bg-black/40 border border-white/[0.06] p-4 overflow-x-auto">
-                        <code className="text-[13px] text-emerald-300/70 font-mono leading-relaxed">{block.code}</code>
+                        <code className="text-[13px] text-blue-300/70 font-mono leading-relaxed">{block.code}</code>
                       </pre>
                     );
                   case "blank":
@@ -379,7 +379,7 @@ export default function ReportPage() {
                 <motion.span
                   animate={{ opacity: [1, 0, 1] }}
                   transition={{ duration: 0.8, repeat: Infinity }}
-                  className="inline-block w-[2px] h-4 bg-emerald-400/60 ml-0.5 align-text-bottom"
+                  className="inline-block w-[2px] h-4 bg-blue-400/60 ml-0.5 align-text-bottom"
                 />
               )}
             </div>

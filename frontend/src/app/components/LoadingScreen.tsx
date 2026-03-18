@@ -6,7 +6,7 @@ export default function LoadingScreen() {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.5 }}
-      className="fixed inset-0 z-40 flex flex-col items-center justify-center bg-[#060608]"
+      className="fixed inset-0 z-40 flex flex-col items-center justify-center bg-[#050509]"
       style={{ fontFamily: "'Outfit', sans-serif" }}
     >
       {/* Grain */}
@@ -23,7 +23,7 @@ export default function LoadingScreen() {
       <motion.div
         animate={{ opacity: [0.03, 0.06, 0.03] }}
         transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-        className="absolute top-[30%] left-[30%] w-[40%] h-[30%] bg-emerald-500 blur-[120px] rounded-full"
+        className="absolute top-[30%] left-[30%] w-[40%] h-[30%] bg-blue-500 blur-[120px] rounded-full"
       />
 
       <div className="relative z-10 flex flex-col items-center gap-8">
@@ -31,7 +31,7 @@ export default function LoadingScreen() {
         <motion.div
           animate={{ scale: [1, 1.3, 1], opacity: [0.5, 1, 0.5] }}
           transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-          className="w-2 h-2 rounded-full bg-emerald-400"
+          className="w-2 h-2 rounded-full bg-blue-400"
         />
 
         <p className="text-white/25 text-sm font-light tracking-wide">

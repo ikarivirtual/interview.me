@@ -202,7 +202,7 @@ export default function InterviewPage() {
   }, [debugTextMode, navigate, paramSessionId]);
 
   return (
-    <div className="relative min-h-screen overflow-hidden flex flex-col bg-[#060608]" style={{ fontFamily: "'Outfit', sans-serif" }}>
+    <div className="relative min-h-screen overflow-hidden flex flex-col bg-[#050509]" style={{ fontFamily: "'Outfit', sans-serif" }}>
       {/* Grain */}
       <div
         className="fixed inset-0 pointer-events-none z-50 opacity-[0.03]"
@@ -215,15 +215,15 @@ export default function InterviewPage() {
 
       {/* Background */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute inset-0 bg-[#060608]" />
-        <div className="absolute top-[10%] left-[30%] w-[40%] h-[30%] bg-emerald-500/[0.04] blur-[100px] rounded-full" />
-        <div className="absolute bottom-[10%] right-[20%] w-[30%] h-[30%] bg-indigo-500/[0.03] blur-[80px] rounded-full" />
+        <div className="absolute inset-0 bg-[#050509]" />
+        <div className="absolute top-[10%] left-[30%] w-[40%] h-[30%] bg-blue-500/[0.04] blur-[100px] rounded-full" />
+        <div className="absolute bottom-[10%] right-[20%] w-[30%] h-[30%] bg-blue-500/[0.03] blur-[80px] rounded-full" />
       </div>
 
       {/* Header */}
       <nav className="relative z-10 w-full px-8 py-5 flex justify-between items-center">
         <div className="text-lg font-semibold tracking-tight text-white/90 flex items-center gap-2.5">
-          <div className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.6)]" />
+          <div className="w-2 h-2 rounded-full bg-blue-400 shadow-[0_0_8px_rgba(59,130,246,0.6)]" />
           interview.me
         </div>
         <button
@@ -287,14 +287,14 @@ export default function InterviewPage() {
                   value={debugAnswer}
                   onChange={(event) => setDebugAnswer(event.target.value)}
                   placeholder="Type an answer for testing..."
-                  className="min-h-28 w-full resize-none rounded-xl border border-white/[0.08] bg-black/20 px-4 py-3 text-sm text-white/80 outline-none placeholder:text-white/25 focus:border-emerald-400/40"
+                  className="min-h-28 w-full resize-none rounded-xl border border-white/[0.08] bg-black/20 px-4 py-3 text-sm text-white/80 outline-none placeholder:text-white/25 focus:border-blue-400/40"
                   disabled={status === "initializing" || status === "processing" || status === "ended"}
                 />
                 <div className="flex justify-end">
                   <button
                     onClick={handleDebugSubmit}
                     disabled={!debugAnswer.trim() || status === "initializing" || status === "processing" || status === "ended"}
-                    className="rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-300 transition-all duration-300 hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:border-white/[0.06] disabled:bg-white/[0.03] disabled:text-white/25"
+                    className="rounded-xl border border-blue-400/20 bg-blue-500/10 px-4 py-2 text-sm text-blue-300 transition-all duration-300 hover:bg-blue-500/20 disabled:cursor-not-allowed disabled:border-white/[0.06] disabled:bg-white/[0.03] disabled:text-white/25"
                   >
                     Send Debug Answer
                   </button>
