@@ -3,7 +3,6 @@ import { env } from "../config/env.js";
 
 const router = Router();
 
-const VOICE_ID = "g6xIsTj2HwM6VR4iXFCw";
 const MODEL_ID = "eleven_flash_v2_5";
 
 // POST /api/tts — Convert text to speech via ElevenLabs streaming API
@@ -21,7 +20,7 @@ router.post("/", async (req, res, next) => {
     }
 
     const response = await fetch(
-      `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}/stream?output_format=mp3_24000_48&optimize_streaming_latency=3`,
+      `https://api.elevenlabs.io/v1/text-to-speech/${env.ELEVENLABS_VOICE_ID}/stream?output_format=mp3_24000_48&optimize_streaming_latency=3`,
       {
         method: "POST",
         headers: {
