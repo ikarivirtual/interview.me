@@ -19,7 +19,7 @@ export const env = {
   MODEL_REPORT: process.env.MODEL_REPORT || process.env.MODEL || "minimax-m2.5",
   MODEL_BRIEF: process.env.MODEL_BRIEF || "openai-gpt-oss-120b",
   LOG_LLM_PAYLOADS: process.env.LOG_LLM_PAYLOADS === "true",
-  PORT: parseInt(process.env.PORT || "3001", 10),
+  PORT: parseInt(process.env.PORT || "8080", 10),
   NODE_ENV: process.env.NODE_ENV || "development",
   SERPER_API_KEY: process.env.SERPER_API_KEY || "",
   JINA_API_KEY: process.env.JINA_API_KEY || "",
