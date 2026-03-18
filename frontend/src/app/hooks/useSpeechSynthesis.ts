@@ -6,6 +6,10 @@ interface SpeechSynthesisResult {
   cancel: () => void;
 }
 
+const canStreamAudio =
+  typeof MediaSource !== "undefined" &&
+  MediaSource.isTypeSupported("audio/mpeg");
+
 function speakWithBrowserTTS(text: string): Promise<void> {
   return new Promise((resolve) => {
     if (!window.speechSynthesis) {
@@ -32,6 +36,76 @@ function speakWithBrowserTTS(text: string): Promise<void> {
     };
     speakNext();
   });
+}
+
+function streamAudioPlayback(
+  response: Response,
+  signal: AbortSignal,
+): { audio: HTMLAudioElement; objectUrl: string; done: Promise<void> } {
+  const mediaSource = new MediaSource();
+  const objectUrl = URL.createObjectURL(mediaSource);
+  const audio = new Audio(objectUrl);
+
+  const done = new Promise<void>((resolve, reject) => {
+    mediaSource.addEventListener("sourceopen", () => {
+      const sourceBuffer = mediaSource.addSourceBuffer("audio/mpeg");
+      const queue: Uint8Array[] = [];
+      let streamDone = false;
+
+      const flush = () => {
+        if (sourceBuffer.updating || queue.length === 0) return;
+        if (mediaSource.readyState !== "open") return;
+        sourceBuffer.appendBuffer(queue.shift()! as BufferSource);
+      };
+
+      sourceBuffer.addEventListener("updateend", () => {
+        if (queue.length > 0) {
+          flush();
+        } else if (streamDone && mediaSource.readyState === "open") {
+          mediaSource.endOfStream();
+        }
+      });
+
+      const reader = response.body!.getReader();
+
+      const pump = async () => {
+        try {
+          while (true) {
+            if (signal.aborted) {
+              reader.cancel();
+              return;
+            }
+            const { done: readerDone, value } = await reader.read();
+            if (readerDone) {
+              streamDone = true;
+              // If not currently updating and queue is empty, end now
+              if (!sourceBuffer.updating && queue.length === 0 && mediaSource.readyState === "open") {
+                mediaSource.endOfStream();
+              }
+              return;
+            }
+            queue.push(value);
+            flush();
+          }
+        } catch (err) {
+          if (signal.aborted) return;
+          if (mediaSource.readyState === "open") {
+            mediaSource.endOfStream("network");
+          }
+        }
+      };
+
+      pump();
+    });
+
+    audio.onended = () => resolve();
+    audio.onerror = () => reject(new Error("Audio playback error"));
+  });
+
+  // Start playback immediately — audio will play as data arrives
+  audio.play().catch(() => {});
+
+  return { audio, objectUrl, done };
 }
 
 export function useSpeechSynthesis(): SpeechSynthesisResult {
@@ -93,6 +167,19 @@ export function useSpeechSynthesis(): SpeechSynthesisResult {
 
       setIsSpeaking(true);
 
+      const onDone = () => {
+        setIsSpeaking(false);
+        audioRef.current = null;
+        if (objectUrlRef.current) {
+          URL.revokeObjectURL(objectUrlRef.current);
+          objectUrlRef.current = null;
+        }
+        if (resolveRef.current) {
+          resolveRef.current();
+          resolveRef.current = null;
+        }
+      };
+
       fetch("/api/tts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -101,50 +188,34 @@ export function useSpeechSynthesis(): SpeechSynthesisResult {
       })
         .then((res) => {
           if (!res.ok) throw new Error(`TTS failed: ${res.status}`);
-          return res.blob();
-        })
-        .then((blob) => {
-          if (controller.signal.aborted) return;
 
-          const url = URL.createObjectURL(blob);
-          objectUrlRef.current = url;
+          if (canStreamAudio && res.body) {
+            // Stream audio chunks into MediaSource for immediate playback
+            const { audio, objectUrl, done } = streamAudioPlayback(res, controller.signal);
+            audioRef.current = audio;
+            objectUrlRef.current = objectUrl;
+            return done;
+          }
 
-          const audio = new Audio(url);
-          audioRef.current = audio;
+          // Fallback: download full blob then play
+          return res.blob().then((blob) => {
+            if (controller.signal.aborted) return;
 
-          audio.onended = () => {
-            setIsSpeaking(false);
-            audioRef.current = null;
-            if (objectUrlRef.current) {
-              URL.revokeObjectURL(objectUrlRef.current);
-              objectUrlRef.current = null;
-            }
-            if (resolveRef.current) {
-              resolveRef.current();
-              resolveRef.current = null;
-            }
-          };
+            const url = URL.createObjectURL(blob);
+            objectUrlRef.current = url;
 
-          audio.onerror = () => {
-            setIsSpeaking(false);
-            audioRef.current = null;
-            if (objectUrlRef.current) {
-              URL.revokeObjectURL(objectUrlRef.current);
-              objectUrlRef.current = null;
-            }
-            if (resolveRef.current) {
-              resolveRef.current();
-              resolveRef.current = null;
-            }
-          };
+            const audio = new Audio(url);
+            audioRef.current = audio;
 
-          audio.play().catch(() => {
-            setIsSpeaking(false);
-            if (resolveRef.current) {
-              resolveRef.current();
-              resolveRef.current = null;
-            }
+            return new Promise<void>((resolvePlay) => {
+              audio.onended = () => resolvePlay();
+              audio.onerror = () => resolvePlay();
+              audio.play().catch(() => resolvePlay());
+            });
           });
+        })
+        .then(() => {
+          if (!controller.signal.aborted) onDone();
         })
         .catch(async (err) => {
           if (err.name === "AbortError") return;
@@ -158,11 +229,7 @@ export function useSpeechSynthesis(): SpeechSynthesisResult {
             // ignore
           }
           usingBrowserTTSRef.current = false;
-          setIsSpeaking(false);
-          if (resolveRef.current) {
-            resolveRef.current();
-            resolveRef.current = null;
-          }
+          onDone();
         });
     });
   }, []);
