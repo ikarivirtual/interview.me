@@ -6,11 +6,12 @@
 
 AI-powered voice interview practice platform. Paste a job posting URL, get a realistic mock interview tailored to the role, and receive a detailed performance report with scored feedback.
 
-Built for the [DigitalOcean Gradient AI Hackathon](https://dograduation.devpost.com/).
+Built for the [DigitalOcean Gradient AI Hackathon](https://digitalocean.devpost.com).
 
 ## How It Works
 
 ```mermaid
+%%{init: {'flowchart': {'htmlLabels': true, 'fontSize': 13}}}%%
 flowchart LR
     A["Paste job URL"] --> B["Enrich context"]
     B --> C["Voice interview"]
@@ -57,7 +58,6 @@ The fastest way to run the full stack — no Node.js or PostgreSQL setup needed.
 ```
 DO_MODEL_ACCESS_KEY=your-key-from-digitalocean
 SERPER_API_KEY=your-serper-key
-JINA_API_KEY=
 ELEVENLABS_API_KEY=your-elevenlabs-key
 ELEVENLABS_VOICE_ID=your-voice-id
 ```
@@ -114,7 +114,6 @@ PORT=3001
 
 # Optional: Context enrichment APIs
 SERPER_API_KEY=your-serper-key
-JINA_API_KEY=your-jina-key
 
 # Optional: ElevenLabs TTS (falls back to browser speech synthesis if not set)
 ELEVENLABS_API_KEY=your-elevenlabs-key
